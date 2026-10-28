@@ -1,5 +1,7 @@
 /**
- * Pine IPC Client — PCSX2's built-in IPC protocol (TCP port 28011)
+ * Pine IPC Client — PCSX2's built-in IPC protocol
+ * Windows: TCP 127.0.0.1:<slot>. macOS/Linux: Unix socket — $TMPDIR (macOS) or
+ * $XDG_RUNTIME_DIR, else /tmp; "pcsx2.sock" for slot 28011, else "pcsx2.sock.<slot>".
  * Can read/write memory, get game info, save/load states
  * Works with vanilla PCSX2 — no patches required
  *
@@ -20,6 +22,7 @@
  */
 
 import * as net from 'node:net';
+import * as path from 'node:path';
 
 // ============================================================
 //  Opcodes — MUST match PCSX2's PINE.cpp IPCCommand enum exactly
@@ -60,12 +63,21 @@ export class PineClient {
     this.port = port;
   }
 
+  /** PINE's Unix socket path on macOS/Linux (mirrors PCSX2's PINEServer). */
+  static socketPath(slot: number): string {
+    const base = (process.platform === 'darwin' ? process.env.TMPDIR : undefined)
+      || process.env.XDG_RUNTIME_DIR || '/tmp';
+    return path.join(base, slot === 28011 ? 'pcsx2.sock' : `pcsx2.sock.${slot}`);
+  }
+
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.socket = new net.Socket();
       this.socket.setNoDelay(true);  // disable Nagle for low-latency IPC
       const timeout = setTimeout(() => { this.socket?.destroy(); reject(new Error('Pine timeout')); }, 3000);
-      this.socket.connect(this.port, this.host, () => { clearTimeout(timeout); this.connected = true; resolve(); });
+      const onConnect = () => { clearTimeout(timeout); this.connected = true; resolve(); };
+      if (process.platform === 'win32') this.socket.connect(this.port, this.host, onConnect);
+      else this.socket.connect(PineClient.socketPath(this.port), onConnect);
       this.socket.on('error', (e) => { clearTimeout(timeout); this.connected = false; reject(e); });
       this.socket.on('close', () => { this.connected = false; });
     });

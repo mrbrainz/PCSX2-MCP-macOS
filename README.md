@@ -1,3 +1,53 @@
+# PCSX2-MCP-macOS
+
+> **Unofficial macOS edition of [hkmodd/PCSX2-MCP](https://github.com/hkmodd/PCSX2-MCP).**
+> Not affiliated with the PCSX2 project. Upstream's Windows docs follow below, unchanged.
+
+Scripted PS2 debugging (breakpoints, stepping, 128-bit registers, disassembly, memory)
+from Claude or any MCP client, on a Mac.
+
+## What this fork changes
+
+| Area | Change |
+|---|---|
+| `pcsx2-patch/pcsx2-v2.8.2-debugserver.patch` | DebugServer as a `git apply` patch against PCSX2 **v2.8.2**, including the hooks in `VMManager.cpp` and `CMakeLists.txt` |
+| `pcsx2-plugin/DebugServer.cpp` | Updated for current PCSX2: `Read8/Write8/Read32` API, `valid` by pointer, 5-arg `MipsStackWalk::Walk` |
+| | **Crash fix:** breakpoint/watchpoint changes run on the CPU thread via `Host::RunOnCPUThread` (as PCSX2's own debugger does); previously `set_breakpoint` without a running game segfaulted in `CBreakPoints::Update` |
+| | Commands that need a game return `{"ok":false,"error":"no VM running"}` instead of crashing |
+| `pcsx2-patch/build-deps-xcode27.patch` | PCSX2 v2.8.2's macOS dependency script vs Xcode 27: deployment target 11.0 → 12.0 (also passed to MoltenVK), Qt `dup3`/`accept4` off |
+| `pcsx2-mcp-server/src/pine-client.ts` | PINE over PCSX2's Unix socket on macOS/Linux (`$TMPDIR/pcsx2.sock`); TCP only on Windows |
+| `build-macos.sh`, `setup-macos.sh` | One-command build and MCP registration |
+
+## Quick start (macOS)
+
+Needs (tested on Apple silicon): full **Xcode** with the Metal toolchain, Homebrew
+`cmake ninja nasm node`, ~15 GB free. PCSX2 on macOS is x86_64 only (runs under Rosetta).
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+brew install cmake ninja nasm node
+./build-macos.sh          # 1-2 h the first time; prints the path to PCSX2.app
+./setup-macos.sh          # builds the MCP bridge, registers it with Claude Code / Desktop
+```
+
+1. Launch the built `PCSX2.app` (not your regular PCSX2) and boot a game.
+2. Optional: Settings → Advanced → enable **PINE**, then restart PCSX2 (game info, save states).
+3. Ask Claude: *"Connect to PCSX2 and set a breakpoint at 0x00100008"*.
+
+Decline PCSX2's update prompt in the patched app: it offers the nightly channel and would
+replace the build with an unpatched one. The debug server listens on 127.0.0.1:21512 only.
+
+## Notes
+
+- Tested 2026-10-28: macOS 27 / Xcode 27.1, PCSX2 v2.8.2, all 30 tools listed; connect
+  (DebugServer + PINE), game info, memory read, breakpoint hit, step, clear, continue.
+- Read memory while paused: PINE and the debugger race the CPU thread
+  ([PCSX2/pcsx2#14589](https://github.com/PCSX2/pcsx2/issues/14589)).
+- `ps2recomp_*` tools need `PS2RECOMP_ROOT` set to a PS2Recomp checkout.
+- Licences as upstream: PCSX2 patch / DebugServer GPL-3.0, MCP server MIT.
+
+---
+
 
 # PCSX2-MCP
 <p align="center">

@@ -42,6 +42,8 @@ typedef int socket_t;
 #include "DebugInterface.h"
 #include "Breakpoints.h"
 #include "MipsStackWalk.h"
+#include "Host.h"
+#include "VMManager.h"
 
 #include <cstring>
 #include <cstdio>
@@ -304,6 +306,11 @@ namespace DebugServer
 
 		JsonBuilder j;
 
+		static const char* const vmCmds[] = {"set_breakpoint", "remove_breakpoint", "set_memcheck", "remove_memcheck",
+			"clear_breakpoints", "pause", "resume", "step", "step_over", "write_memory", "write_register", "set_pc"};
+		if (!VMManager::HasValidVM() && std::find(std::begin(vmCmds), std::end(vmCmds), cmd) != std::end(vmCmds))
+			return "{\"ok\":false,\"error\":\"no VM running\"}";
+
 		// ----- STATUS -----
 		if (cmd == "status")
 		{
@@ -406,7 +413,7 @@ namespace DebugServer
 			for (int i = 0; i < len; i++)
 			{
 				bool valid = true;
-				u32 byte = cpu->read8(addr + i, valid);
+				u32 byte = cpu->Read8(addr + i, &valid);
 				if (!valid) byte = 0;
 				char hb[4];
 				snprintf(hb, sizeof(hb), "%02x", byte & 0xFF);
@@ -424,7 +431,7 @@ namespace DebugServer
 			for (size_t i = 0; i + 1 < hexData.size(); i += 2)
 			{
 				u8 byte = (u8)strtoul(hexData.substr(i, 2).c_str(), nullptr, 16);
-				cpu->write8(addr + written, byte);
+				cpu->Write8(addr + written, byte);
 				written++;
 			}
 			j.startObject();
@@ -449,7 +456,7 @@ namespace DebugServer
 				if (!cpu->isValidAddress(pc)) break;
 
 				bool valid = true;
-				u32 opcode = cpu->read32(pc, valid);
+				u32 opcode = cpu->Read32(pc, &valid);
 
 				j.startObject();
 				j.key("address"); j.valHex32(pc);
@@ -493,10 +500,10 @@ namespace DebugServer
 			std::string desc = getStr(params, "description", "");
 			auto bpCpu = getBpCpu(cpuName);
 
-			CBreakPoints::AddBreakPoint(bpCpu, addr, temp, enabled);
+			Host::RunOnCPUThread([&] { CBreakPoints::AddBreakPoint(bpCpu, addr, temp, enabled); }, true);
 
 			if (!desc.empty())
-				CBreakPoints::ChangeBreakPointDescription(bpCpu, addr, desc);
+				Host::RunOnCPUThread([&] { CBreakPoints::ChangeBreakPointDescription(bpCpu, addr, desc); }, true);
 
 			if (!condExpr.empty())
 			{
@@ -506,7 +513,7 @@ namespace DebugServer
 				std::string error;
 				if (cpu->initExpression(condExpr.c_str(), cond.expression, error))
 				{
-					CBreakPoints::ChangeBreakPointAddCond(bpCpu, addr, cond);
+					Host::RunOnCPUThread([&] { CBreakPoints::ChangeBreakPointAddCond(bpCpu, addr, cond); }, true);
 				}
 			}
 
@@ -519,7 +526,7 @@ namespace DebugServer
 		else if (cmd == "remove_breakpoint")
 		{
 			u32 addr = (u32)getNum(params, "address", 0);
-			CBreakPoints::RemoveBreakPoint(getBpCpu(cpuName), addr);
+			Host::RunOnCPUThread([&] { CBreakPoints::RemoveBreakPoint(getBpCpu(cpuName), addr); }, true);
 			j.startObject();
 			j.kv("ok", true);
 			j.endObject();
@@ -544,10 +551,10 @@ namespace DebugServer
 			else if (actionStr == "both") result = MEMCHECK_BOTH;
 
 			auto bpCpu = getBpCpu(cpuName);
-			CBreakPoints::AddMemCheck(bpCpu, start, end, cond, result);
+			Host::RunOnCPUThread([&] { CBreakPoints::AddMemCheck(bpCpu, start, end, cond, result); }, true);
 
 			if (!desc.empty())
-				CBreakPoints::ChangeMemCheckDescription(bpCpu, start, end, desc);
+				Host::RunOnCPUThread([&] { CBreakPoints::ChangeMemCheckDescription(bpCpu, start, end, desc); }, true);
 
 			if (!condExpr.empty())
 			{
@@ -556,7 +563,7 @@ namespace DebugServer
 				bpCond.expressionString = condExpr;
 				std::string error;
 				if (cpu->initExpression(condExpr.c_str(), bpCond.expression, error))
-					CBreakPoints::ChangeMemCheckAddCond(bpCpu, start, end, bpCond);
+					Host::RunOnCPUThread([&] { CBreakPoints::ChangeMemCheckAddCond(bpCpu, start, end, bpCond); }, true);
 			}
 
 			j.startObject();
@@ -570,7 +577,7 @@ namespace DebugServer
 		{
 			u32 start = (u32)getNum(params, "address", 0);
 			u32 end = (u32)getNum(params, "end", start + 4);
-			CBreakPoints::RemoveMemCheck(getBpCpu(cpuName), start, end);
+			Host::RunOnCPUThread([&] { CBreakPoints::RemoveMemCheck(getBpCpu(cpuName), start, end); }, true);
 			j.startObject();
 			j.kv("ok", true);
 			j.endObject();
@@ -634,7 +641,7 @@ namespace DebugServer
 		else if (cmd == "resume")
 		{
 			// Skip current BP if we're sitting on one (matches PCSX2 GUI behavior)
-			CBreakPoints::SetSkipFirst(getBpCpu(cpuName), cpu->getPC());
+			Host::RunOnCPUThread([&] { CBreakPoints::SetSkipFirst(getBpCpu(cpuName), cpu->getPC()); }, true);
 			cpu->resumeCpu();
 			j.startObject();
 			j.kv("ok", true);
@@ -646,10 +653,10 @@ namespace DebugServer
 			u32 pc = cpu->getPC();
 
 			// Skip current BP if we're sitting on one (matches PCSX2 GUI behavior)
-			CBreakPoints::SetSkipFirst(getBpCpu(cpuName), pc);
+			Host::RunOnCPUThread([&] { CBreakPoints::SetSkipFirst(getBpCpu(cpuName), pc); }, true);
 
 			u32 nextPc = pc + 4;
-			CBreakPoints::AddBreakPoint(getBpCpu(cpuName), nextPc, true, true, true);
+			Host::RunOnCPUThread([&] { CBreakPoints::AddBreakPoint(getBpCpu(cpuName), nextPc, true, true, true); }, true);
 			cpu->resumeCpu();
 
 			// Wait for it to hit (with timeout)
@@ -671,7 +678,7 @@ namespace DebugServer
 			j.kv("in_bios", inBios);
 
 			bool valid = true;
-			u32 opcode = cpu->read32(newPc, valid);
+			u32 opcode = cpu->Read32(newPc, &valid);
 			j.key("opcode"); j.valHex32(opcode);
 			j.endObject();
 		}
@@ -681,10 +688,10 @@ namespace DebugServer
 			u32 pc = cpu->getPC();
 
 			// Skip current BP if we're sitting on one (matches PCSX2 GUI behavior)
-			CBreakPoints::SetSkipFirst(getBpCpu(cpuName), pc);
+			Host::RunOnCPUThread([&] { CBreakPoints::SetSkipFirst(getBpCpu(cpuName), pc); }, true);
 
 			bool valid = true;
-			u32 opcode = cpu->read32(pc, valid);
+			u32 opcode = cpu->Read32(pc, &valid);
 			u32 op = (opcode >> 26) & 63;
 
 			u32 bpAddr = pc + 8; // default: skip instruction + delay slot
@@ -698,7 +705,7 @@ namespace DebugServer
 				bpAddr = pc + 4;
 			}
 
-			CBreakPoints::AddBreakPoint(getBpCpu(cpuName), bpAddr, true, true, true);
+			Host::RunOnCPUThread([&] { CBreakPoints::AddBreakPoint(getBpCpu(cpuName), bpAddr, true, true, true); }, true);
 			cpu->resumeCpu();
 
 			int timeout = 10000;
@@ -767,19 +774,17 @@ namespace DebugServer
 
 			// Find the running thread to get entry point and stack top
 			u32 threadEntry = 0;
-			u32 threadStackTop = 0;
 			auto threads = cpu->GetThreadList();
 			for (const auto& t : threads)
 			{
 				if (t->Status() == ThreadStatus::THS_RUN)
 				{
 					threadEntry = t->EntryPoint();
-					threadStackTop = t->StackTop();
 					break;
 				}
 			}
 
-			auto frames = MipsStackWalk::Walk(cpu, pc, ra, sp, threadEntry, threadStackTop);
+			auto frames = MipsStackWalk::Walk(cpu, pc, ra, sp, threadEntry);
 
 			j.startObject();
 			j.kv("ok", true);
@@ -821,7 +826,7 @@ namespace DebugServer
 			for (int i = 0; i < maxLen; i++)
 			{
 				bool valid = true;
-				u32 byte = cpu->read8(addr + i, valid);
+				u32 byte = cpu->Read8(addr + i, &valid);
 				if (!valid || byte == 0) break;
 				str += (char)byte;
 			}
@@ -835,8 +840,8 @@ namespace DebugServer
 		// ----- CLEAR ALL BREAKPOINTS -----
 		else if (cmd == "clear_breakpoints")
 		{
-			CBreakPoints::ClearAllBreakPoints();
-			CBreakPoints::ClearAllMemChecks();
+			Host::RunOnCPUThread([&] { CBreakPoints::ClearAllBreakPoints(); }, true);
+			Host::RunOnCPUThread([&] { CBreakPoints::ClearAllMemChecks(); }, true);
 			j.startObject();
 			j.kv("ok", true);
 			j.endObject();

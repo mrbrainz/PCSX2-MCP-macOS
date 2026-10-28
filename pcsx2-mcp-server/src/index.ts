@@ -80,7 +80,7 @@ server.tool('pcsx2_connect',
         debugServer = new DebugServerClient('127.0.0.1', debug_port);
         await debugServer.connect();
         const st = await debugServer.getStatus();
-        results.push(`✅ DebugServer: connected (PC=0x${st.pc}, paused=${st.paused})`);
+        results.push(`✅ DebugServer: connected (PC=${st.pc}, paused=${st.paused})`);
         results.push('   → 128-bit registers, native disasm, expressions, conditional BP, step-over, threads');
       } catch (e: any) {
         debugServer = null;
