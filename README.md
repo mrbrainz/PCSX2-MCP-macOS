@@ -21,12 +21,12 @@ from Claude or any MCP client, on a Mac.
 ## Quick start (macOS)
 
 Needs (tested on Apple silicon): full **Xcode** with the Metal toolchain, Homebrew
-`cmake ninja nasm node`, ~15 GB free. PCSX2 on macOS is x86_64 only (runs under Rosetta).
+`cmake ninja nasm node`, ~1 GB free. PCSX2 on macOS is x86_64 only (runs under Rosetta).
 
 ```bash
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 brew install cmake ninja nasm node
-./build-macos.sh          # 1-2 h the first time; prints the path to PCSX2.app
+./build-macos.sh          # ~15 min first time (M-series, 2026-10-28); prints the app path
 ./setup-macos.sh          # builds the MCP bridge, registers it with Claude Code / Desktop
 ```
 
@@ -39,7 +39,7 @@ replace the build with an unpatched one. The debug server listens on 127.0.0.1:2
 
 ## Notes
 
-- Tested 2026-10-28: macOS 27 / Xcode 27.1, PCSX2 v2.8.2, all 30 tools listed; connect
+- Tested 2026-10-28 from a fresh clone: build-macos.sh from scratch (15 min, ~500 MB), setup-macos.sh (Claude Code + Desktop), then via MCP and Claude Code: all 30 tools listed; connect
   (DebugServer + PINE), game info, memory read, breakpoint hit, step, clear, continue.
 - Read memory while paused: PINE and the debugger race the CPU thread
   ([PCSX2/pcsx2#14589](https://github.com/PCSX2/pcsx2/issues/14589)).

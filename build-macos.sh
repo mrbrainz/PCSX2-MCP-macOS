@@ -3,7 +3,7 @@
 #
 # Needs: full Xcode selected (xcode-select -p -> Xcode.app), Homebrew cmake,
 # ninja and nasm. PCSX2 on macOS is x86_64 only and runs under Rosetta.
-# First run takes 1-2 hours (Qt and friends build from source) and ~15 GB.
+# First run takes ~15 min on an M-series Mac (Qt and friends build from source), ~500 MB.
 #
 # Usage: ./build-macos.sh [work dir]   (default: ./pcsx2-build)
 set -euo pipefail
