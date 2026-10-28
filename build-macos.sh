@@ -49,6 +49,10 @@ if grep -q "error:" "$WORK/build.log" && ! grep -q "Codesign signing error" "$WO
 fi
 
 APP="$WORK/src/build/pcsx2-qt/PCSX2.app"
+# Official builds bundle the community game patches (CI "Download patches" step);
+# without it PCSX2 shows "failed to load patches.zip" on boot.
+curl -fL -o "$APP/Contents/Resources/patches.zip" \
+	https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip
 codesign --force --deep -s - "$APP"
 codesign --verify "$APP"
 echo
