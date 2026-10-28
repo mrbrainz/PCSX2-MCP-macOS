@@ -43,6 +43,7 @@ replace the build with an unpatched one. The debug server listens on 127.0.0.1:2
   (DebugServer + PINE), game info, memory read, breakpoint hit, step, clear, continue.
 - Read memory while paused: PINE and the debugger race the CPU thread
   ([PCSX2/pcsx2#14589](https://github.com/PCSX2/pcsx2/issues/14589)).
+- `npm audit`: one remaining finding (zod 3; fix needs zod 4 and schema changes). Unused HTTP transport deps patched via `npm audit fix`.
 - `ps2recomp_*` tools need `PS2RECOMP_ROOT` set to a PS2Recomp checkout.
 - Licences as upstream: PCSX2 patch / DebugServer GPL-3.0, MCP server MIT.
 

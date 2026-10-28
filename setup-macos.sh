@@ -20,6 +20,8 @@ command -v node > /dev/null || { echo "Node.js >= 18 required (brew install node
 
 if [ $DO_CODE = 1 ]; then
 	if command -v claude > /dev/null; then
+		# Re-add so a moved checkout updates the path.
+		claude mcp remove --scope user pcsx2 > /dev/null 2>&1 || true
 		claude mcp add --scope user pcsx2 -- node "$SERVER" && echo "Claude Code: added 'pcsx2'"
 	else
 		echo "Claude Code CLI not found; skipped"
@@ -29,7 +31,8 @@ fi
 if [ $DO_DESKTOP = 1 ]; then
 	CFG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
 	if [ -d "$(dirname "$CFG")" ]; then
-		[ -f "$CFG" ] && cp "$CFG" "$CFG.bak"
+		# Keep the first backup: later runs must not overwrite the original config.
+		[ -f "$CFG" ] && [ ! -f "$CFG.bak" ] && cp "$CFG" "$CFG.bak"
 		python3 - "$CFG" "$SERVER" <<'EOF'
 import json, os, sys
 cfg, server = sys.argv[1], sys.argv[2]
